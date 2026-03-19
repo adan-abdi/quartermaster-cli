@@ -1,0 +1,63 @@
+[package]
+name = "quartermaster"
+version = "1.1.0"
+edition = "2021"
+authors = ["Quartermaster Team"]
+description = "Navigate the constellations of your codebase - A repository analysis and documentation generator"
+license = "MIT"
+readme = "README.md"
+repository = "https://github.com/quartermaster/quartermaster-cli"
+default-run = "quartermaster"
+keywords = ["documentation", "cli", "developer-tools", "analysis", "knowledge-graph"]
+categories = ["command-line-utilities", "development-tools"]
+include = [
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/LICENSE",
+    "/Makefile",
+    "/build.rs",
+    "/src/**/*",
+    "/static/**/*",
+    "/scripts/**/*",
+    "/docs/**/*",
+]
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+tokio = { version = "1.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+git2 = "0.18"
+ignore = "0.4"
+walkdir = "2.3"
+regex = "1.10"
+colored = "2.0"
+indicatif = "0.17"
+crossterm = "0.27"
+anyhow = "1.0"
+thiserror = "1.0"
+glob = "0.3"
+dialoguer = "0.11"
+mime_guess = "2.0"
+open = "5.3"
+tiny_http = "0.12"
+tree-sitter = "0.20"
+tree-sitter-rust = "0.20"
+tree-sitter-typescript = "0.20"
+tree-sitter-javascript = "0.20"
+tree-sitter-python = "0.20"
+tree-sitter-go = "0.20"
+uuid = { version = "1.6", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+serde_yaml = "0.9"
+urlencoding = "2.1"
+
+[[bin]]
+name = "quartermaster"
+path = "src/main.rs"
+
+[[bin]]
+name = "qm"
+path = "src/bin/qm.rs"
