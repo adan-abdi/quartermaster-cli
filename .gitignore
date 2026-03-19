@@ -5,7 +5,6 @@ target/
 .quartermaster/
 
 # Generated documentation
-doc/
 test-doc*/
 test-final/
 

@@ -1,3 +1,3 @@
 fn main() -> anyhow::Result<()> {
-    quartermaster::run()
+    quartermaster_cli::run()
 }

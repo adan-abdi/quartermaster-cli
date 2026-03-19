@@ -1,33 +1,33 @@
 # Quartermaster CLI
 
-Quartermaster is a Rust CLI that scans a repository, generates a local `./.quartermaster` workspace, and opens a browser dashboard for exploring code, docs, notes, and dependency relationships.
+Quartermaster is a Rust CLI for mapping a codebase into a local, browsable workspace.
 
-## What It Does
+Run it against a repository and it will:
 
-- Analyzes a local path or GitHub repository
-- Detects languages, frameworks, and tooling
-- Builds versioned developer docs in `./.quartermaster/versions/...`
-- Preserves editable notes in `./.quartermaster/notes`
-- Launches a local dashboard for browsing the generated workspace
+- scan the project tree
+- detect languages, frameworks, and tooling
+- extract dependency relationships
+- generate versioned developer docs in `./.quartermaster`
+- open a local dashboard for exploring code, docs, notes, and graph data
 
-## Installation
+## Quickstart
 
-```bash
-cargo install --path .
-```
-
-For local development:
+Build locally:
 
 ```bash
 cargo build --release
 ```
 
-## Usage
-
-Interactive flow:
+Install from crates.io:
 
 ```bash
-quartermaster
+cargo install quartermaster-cli
+```
+
+Run the interactive flow in the current repository:
+
+```bash
+cargo run --bin quartermaster
 ```
 
 Chart a repository directly:
@@ -38,24 +38,71 @@ quartermaster chart github.com/rust-lang/rust
 qm analyze .
 ```
 
-Useful flags:
+## How It Works
+
+Quartermaster writes a local workspace alongside the repository being analyzed:
+
+```text
+.quartermaster/
+├── current.txt
+├── notes/
+└── versions/
+    └── <version-id>/
+        ├── manifest.json
+        ├── README.md
+        └── dev_docs/
+```
+
+The generated workspace separates durable notes from generated output:
+
+- `notes/` is for human-authored notes that persist across runs
+- `versions/<version-id>/` contains generated docs and manifests for a specific scan
+- `current.txt` points the dashboard at the active generated version
+
+## Commands
+
+Start the interactive flow:
+
+```bash
+quartermaster
+```
+
+Analyze a local path or GitHub repository:
+
+```bash
+quartermaster chart .
+quartermaster chart path/to/repo
+quartermaster chart github.com/owner/repo
+```
+
+Common flags:
 
 ```bash
 quartermaster chart . --no-open
 quartermaster chart . --non-interactive
-quartermaster chart . --include-root src,cli --port 4310
+quartermaster chart . --include-root src,tests
+quartermaster chart . --port 4310
 quartermaster chart . --track-workspace
+quartermaster chart . --no-gitignore
 ```
 
-## Standalone Packaging
-
-This crate ships the dashboard runtime as embedded static assets compiled into the binary. The source tree for the dashboard can live elsewhere; the CLI only needs the built artifacts under `static/` at compile time.
-
-Use the sync script after rebuilding dashboard assets in the parent workspace:
+There is also a short alias binary:
 
 ```bash
-./scripts/sync-dashboard-artifacts.sh
+qm analyze .
 ```
+
+## Dashboard
+
+After generation, Quartermaster can start a localhost server and open a browser dashboard.
+
+The dashboard is designed around three content sources:
+
+- embedded static UI assets bundled with the CLI
+- generated workspace files from `./.quartermaster`
+- repository files from the checked-out source tree
+
+That makes the CLI self-contained at runtime while still letting the browser inspect the current repository and generated docs on one local origin.
 
 ## Repository Layout
 
@@ -68,20 +115,23 @@ cli/
 │   ├── dashboard/index.html
 │   ├── assets/...
 │   └── glyph_logo.svg
-├── scripts/
-└── docs/
+├── docs/
+└── scripts/
 ```
 
 ## Development
+
+Useful local checks:
 
 ```bash
 cargo fmt
 cargo test
 cargo package --list --allow-dirty
-make docs
 ```
 
-Architecture notes live in [docs/architecture.md](./docs/architecture.md).
+Further reading:
+
+- Architecture: [docs/architecture.md](./docs/architecture.md)
 
 ## License
 
