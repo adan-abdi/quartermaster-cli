@@ -27,7 +27,7 @@ const DEFAULT_PORT: u16 = 4210;
 #[derive(Parser)]
 #[command(name = "quartermaster")]
 #[command(about = "Generate repo docs and launch the Quartermaster dashboard")]
-#[command(version = "1.1.0")]
+#[command(version = "1.2.0")]
 #[command(author = "Quartermaster Team")]
 struct Cli {
     #[command(subcommand)]

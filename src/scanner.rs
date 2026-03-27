@@ -221,22 +221,33 @@ impl RepoScanner {
     }
 
     fn determine_source_type(&self, source: &str) -> Result<SourceType> {
-        let github_regex =
-            Regex::new(r"github\.com[:/](?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$")?;
+        let normalized_source = source.trim().trim_end_matches('/');
+        let github_regex = Regex::new(
+            r"(?x)
+            ^
+            (?:
+                git@github\.com:
+                |ssh://git@github\.com/
+                |https?://github\.com/
+                |github\.com/
+            )?
+            (?P<owner>[^/\s:]+)
+            /
+            (?P<repo>[^/\s]+?)
+            (?:\.git)?
+            $
+            ",
+        )?;
 
-        if let Some(captures) = github_regex.captures(source) {
+        if let Some(captures) = github_regex.captures(normalized_source) {
             let owner = captures["owner"].to_string();
             let repo = captures["repo"].to_string();
-            let url = if source.starts_with("http") {
-                source.to_string()
-            } else {
-                format!("https://github.com/{owner}/{repo}.git")
-            };
+            let url = format!("https://github.com/{owner}/{repo}.git");
 
             return Ok(SourceType::GitHub { url, owner, repo });
         }
 
-        let path = Path::new(source);
+        let path = Path::new(normalized_source);
         if path.exists() {
             return Ok(SourceType::Local {
                 path: path.canonicalize().unwrap_or_else(|_| path.to_path_buf()),
@@ -342,7 +353,10 @@ impl RepoScanner {
                 continue;
             }
 
-            let metadata = fs::metadata(entry_path)?;
+            let metadata = match fs::metadata(entry_path) {
+                Ok(metadata) => metadata,
+                Err(_) => continue,
+            };
             let size = metadata.len();
             let resolved_file_type = self.determine_file_type(entry_path);
 
@@ -797,4 +811,37 @@ fn normalize_path(path: &Path) -> String {
         })
         .collect::<Vec<_>>()
         .join("/")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RepoScanner, SourceType};
+
+    #[test]
+    fn accepts_common_github_source_formats() {
+        let scanner = RepoScanner::new(true);
+
+        let cases = [
+            "github.com/adan-abdi/quartermaster-cli",
+            "https://github.com/adan-abdi/quartermaster-cli",
+            "https://github.com/adan-abdi/quartermaster-cli/",
+            "git@github.com:adan-abdi/quartermaster-cli.git",
+            "adan-abdi/quartermaster-cli",
+        ];
+
+        for case in cases {
+            let source_type = scanner
+                .determine_source_type(case)
+                .expect("source should parse");
+
+            match source_type {
+                SourceType::GitHub { owner, repo, url } => {
+                    assert_eq!(owner, "adan-abdi");
+                    assert_eq!(repo, "quartermaster-cli");
+                    assert_eq!(url, "https://github.com/adan-abdi/quartermaster-cli.git");
+                }
+                SourceType::Local { .. } => panic!("expected GitHub source"),
+            }
+        }
+    }
 }

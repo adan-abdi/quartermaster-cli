@@ -1,4 +1,7 @@
-use crate::generator::{CURRENT_VERSION_FILE_NAME, NOTES_DIR_NAME, WORKSPACE_VERSIONS_DIR_NAME};
+use crate::generator::{
+    note_id_from_relative_path, WorkspaceDoc, WorkspaceTreeNode, CURRENT_VERSION_FILE_NAME,
+    NOTES_DIR_NAME, WORKSPACE_VERSIONS_DIR_NAME,
+};
 use anyhow::{anyhow, Context, Result};
 use mime_guess::from_path;
 use serde::{Deserialize, Serialize};
@@ -55,10 +58,24 @@ fn handle_request(request: Request, workspace_root: &Path, repo_root: &Path) -> 
             let relative = path.trim_start_matches("/repo/");
             respond_scoped_file(request, repo_root, relative)
         }
+        (Method::Get, "/api/workspace/notes") => handle_get_notes_snapshot(request, workspace_root),
         (Method::Post, "/api/fs/create") => handle_create_fs(request, workspace_root, repo_root),
         (Method::Get, path) => respond_embedded_request(request, path),
         _ => respond_not_found(request),
     }
+}
+
+fn handle_get_notes_snapshot(request: Request, workspace_root: &Path) -> Result<()> {
+    let snapshot = collect_notes_snapshot(workspace_root)?;
+    respond_json(
+        request,
+        StatusCode(200),
+        ApiResponse {
+            ok: true,
+            data: Some(snapshot),
+            error: None,
+        },
+    )
 }
 
 fn handle_create_fs(mut request: Request, workspace_root: &Path, repo_root: &Path) -> Result<()> {
@@ -270,6 +287,12 @@ struct CreateFsResponse {
 }
 
 #[derive(Debug, Serialize)]
+struct NotesSnapshot {
+    tree: WorkspaceTreeNode,
+    notes: Vec<WorkspaceDoc>,
+}
+
+#[derive(Debug, Serialize)]
 struct ApiResponse<T> {
     ok: bool,
     data: Option<T>,
@@ -279,6 +302,117 @@ struct ApiResponse<T> {
 struct EmbeddedAsset {
     path: &'static str,
     bytes: &'static [u8],
+}
+
+fn collect_notes_snapshot(workspace_root: &Path) -> Result<NotesSnapshot> {
+    let notes_root = workspace_root.join(NOTES_DIR_NAME);
+    fs::create_dir_all(&notes_root)?;
+
+    let mut notes = Vec::new();
+    let tree = build_notes_tree(&notes_root, workspace_root, &mut notes)?;
+    notes.sort_by(|left, right| left.path.cmp(&right.path));
+
+    Ok(NotesSnapshot { tree, notes })
+}
+
+fn build_notes_tree(
+    absolute_path: &Path,
+    workspace_root: &Path,
+    notes: &mut Vec<WorkspaceDoc>,
+) -> Result<WorkspaceTreeNode> {
+    let relative_path = normalize_path_for_workspace(absolute_path.strip_prefix(workspace_root)?);
+    let name = if relative_path == NOTES_DIR_NAME {
+        "Notes".to_string()
+    } else {
+        absolute_path
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("notes")
+            .to_string()
+    };
+
+    let mut children = Vec::new();
+    let mut entries = fs::read_dir(absolute_path)?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .collect::<Vec<_>>();
+    entries.sort();
+
+    for entry_path in entries {
+        let metadata = match fs::metadata(&entry_path) {
+            Ok(metadata) => metadata,
+            Err(_) => continue,
+        };
+
+        if metadata.is_dir() {
+            children.push(build_notes_tree(&entry_path, workspace_root, notes)?);
+            continue;
+        }
+
+        if entry_path.extension().and_then(|value| value.to_str()) != Some("md") {
+            continue;
+        }
+
+        let note_path = normalize_path_for_workspace(entry_path.strip_prefix(workspace_root)?);
+        let id = note_id_from_relative_path(&note_path);
+        let title = entry_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .unwrap_or("note")
+            .replace('-', " ");
+        let lines_of_code = fs::read_to_string(&entry_path)
+            .ok()
+            .map(|content| content.lines().count());
+
+        notes.push(WorkspaceDoc {
+            id: id.clone(),
+            title,
+            path: note_path.clone(),
+            doc_relative_path: note_path.clone(),
+            description: "Workspace note".to_string(),
+            file_type: "note".to_string(),
+            language: Some("Markdown".to_string()),
+            size: metadata.len(),
+            lines_of_code,
+            imports: Vec::new(),
+            references: Vec::new(),
+            referenced_by: Vec::new(),
+            exports: Vec::new(),
+        });
+
+        children.push(WorkspaceTreeNode {
+            name: entry_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("note.md")
+                .to_string(),
+            path: note_path.clone(),
+            node_type: "file".to_string(),
+            children: Vec::new(),
+            page_id: Some(id),
+            doc_relative_path: Some(note_path),
+        });
+    }
+
+    Ok(WorkspaceTreeNode {
+        name,
+        path: relative_path,
+        node_type: "directory".to_string(),
+        children,
+        page_id: None,
+        doc_relative_path: Some(normalize_path_for_workspace(
+            absolute_path.strip_prefix(workspace_root)?,
+        )),
+    })
+}
+
+fn normalize_path_for_workspace(path: &Path) -> String {
+    path.components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => value.to_str().map(|value| value.to_string()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("/")
 }
 
 include!(concat!(env!("OUT_DIR"), "/embedded_assets.rs"));

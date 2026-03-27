@@ -597,9 +597,10 @@ impl DocGenerator {
                 .replace('-', " ");
 
             let size = fs::metadata(path)?.len();
+            let id = note_id_from_relative_path(&relative_path);
 
             notes.push(WorkspaceDoc {
-                id: format!("note-{}", Uuid::new_v4()),
+                id,
                 title,
                 path: relative_path.clone(),
                 doc_relative_path: relative_path,
@@ -728,4 +729,8 @@ fn generate_version_id() -> String {
     let now = Utc::now();
     let suffix = Uuid::new_v4().simple().to_string();
     format!("{}-{}", now.format("%Y%m%dT%H%M%SZ"), &suffix[..8])
+}
+
+pub fn note_id_from_relative_path(path: &str) -> String {
+    format!("note:{}", path.trim_start_matches('/'))
 }
